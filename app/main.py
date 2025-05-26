@@ -1,6 +1,6 @@
 import sys
 from fastapi import FastAPI, APIRouter
-from app.routers import review
+from .routers import review
 
 # print(sys.executable)
 
