@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ..models.models import Editorial
+from models.models import Editorial
 
 router = APIRouter(
     prefix="/review", tags=["review"]
