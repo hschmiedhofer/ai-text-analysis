@@ -1,10 +1,8 @@
 import os
 import time
-from typing import Any, Literal
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as api_exceptions
-from pydantic import BaseModel
 from models.models import TextAssessment, ApiResponse
 
 
@@ -56,7 +54,7 @@ def identify_errors_in_text(
         processing_time = end_time - start_time
     except api_exceptions.APIError as e:
         # re-raise as a custom error for specific handling upstream
-        raise GeminiGeneralError(f"API call failed: {e}") from e
+        raise GeminiGeneralError(f"API call failed: {e}")
 
     # parse response to expected model
     if isinstance(response.parsed, ApiResponse):

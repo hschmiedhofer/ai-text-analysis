@@ -1,19 +1,20 @@
-from fastapi import APIRouter
-from models.models import Editorial
+from typing import Annotated
+from fastapi import APIRouter, Body, HTTPException
+from models.models import TextAssessment
+from services.gemini import identify_errors_in_text, GeminiGeneralError
+from http import HTTPStatus
 
 router = APIRouter(
     prefix="/review", tags=["review"]
 )  # todo add dependencies and responses
 
 
-fake_items_db = {"plumbus": {"name": "Plumbus"}, "gun": {"name": "Portal Gun"}}
-
-
-@router.get("/")
-async def get_test_response():
-    return fake_items_db
-
-
 @router.post("/")
-async def submit_editorial(editorial: Editorial):
-    return f"submitted: {editorial.name}"
+async def check_article(article: Annotated[str, Body()]) -> TextAssessment:
+
+    try:
+        returndata = identify_errors_in_text(article)
+    except GeminiGeneralError as e:
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    return returndata
