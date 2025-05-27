@@ -1,5 +1,4 @@
 import os
-import pathlib
 import time
 from typing import Any, Literal
 from dotenv import load_dotenv
@@ -55,7 +54,7 @@ class TextAssessment(ApiResponse):
 
 def identify_errors_in_text(
     text: str,
-) -> tuple[ApiResponse, dict[str, Any]]:
+) -> TextAssessment:
     assert GEMINI_MODEL_ID is not None
 
     prompt = """
@@ -64,7 +63,6 @@ def identify_errors_in_text(
             and adds the following 50 characters from the original text. 
             Do not add characters that came before the original_error_text!!
             Additionally, return your summary of the text quality.
-
     """
 
     try:
@@ -82,6 +80,12 @@ def identify_errors_in_text(
     except api_exceptions.APIError as e:
         # re-raise as a custom error for specific handling upstream
         raise GeminiGeneralError(f"API call failed: {e}") from e
+
+    # parse response to expected model
+    if isinstance(response.parsed, ApiResponse):
+        response_model = response.parsed
+    else:
+        raise GeminiGeneralError(f"Invalid response type: {type(response.parsed)}")
 
     # Collect metadata
     metadata = {
@@ -102,7 +106,12 @@ def identify_errors_in_text(
             }
         )
 
-    return (response.parsed, metadata)
+    return TextAssessment(
+        errors=response_model.errors,
+        summary=response_model.summary,
+        processing_time=metadata["processing_time"],
+        tokens_used=metadata["total_tokens"] or 0,  # Use 0 if None
+    )
 
 
 #  make the script executable for testing
@@ -119,20 +128,13 @@ if __name__ == "__main__":
         exit(1)
 
     # query the api for the correction
-    api_response, api_metadata = identify_errors_in_text(faulty_article)
-
-    final = TextAssessment(
-        errors=api_response.errors,
-        summary=api_response.summary,
-        processing_time=api_metadata["processing_time"],
-        tokens_used=api_metadata["total_tokens"] or 0,  # Use 0 if None
-    )
+    final_assessment = identify_errors_in_text(faulty_article)
 
     # write result to file
     output_file_path = "logs/identified_errors.json"
     try:
         with open(output_file_path, "w") as f:
-            f.write(final.model_dump_json(indent=2))
+            f.write(final_assessment.model_dump_json(indent=2))
         print(f"Successfully exported errors to {output_file_path}")
     except IOError as e:
         print(f"Failed to write errors to JSON file: {e}")
