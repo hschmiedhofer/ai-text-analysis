@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as api_exceptions
 from pydantic import BaseModel
+from models.models import TextAssessment, ApiResponse
 
 
 load_dotenv()  # Load environment variables from .env file
@@ -23,33 +24,9 @@ if not GEMINI_MODEL_ID:
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# *----------------
-
-
 # custom exception (optional, but good practice)
 class GeminiGeneralError(Exception):
     pass
-
-
-class ErrorDetail(BaseModel):
-    original_error_text: str
-    corrected_text: str
-    error_category: Literal["spelling", "grammar", "style"]
-    error_description: str
-    error_position: int
-    error_context: str
-
-
-# expected response from the api
-class ApiResponse(BaseModel):
-    errors: list[ErrorDetail]
-    summary: str
-
-
-# api response enhanced with api request metadata.
-class TextAssessment(ApiResponse):
-    processing_time: float
-    tokens_used: int
 
 
 def identify_errors_in_text(
