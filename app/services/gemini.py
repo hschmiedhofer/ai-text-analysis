@@ -64,30 +64,15 @@ def identify_errors_in_text(
     else:
         raise GeminiGeneralError(f"Invalid response type: {type(response.parsed)}")
 
-    # Collect metadata
-    metadata = {
-        "processing_time": processing_time,
-        "prompt_tokens": None,
-        "response_tokens": None,
-        "total_tokens": None,
-    }
-
-    # Access usage metadata
-    if hasattr(response, "usage_metadata") and response.usage_metadata:
-        usage = response.usage_metadata
-        metadata.update(
-            {
-                "prompt_tokens": usage.prompt_token_count,
-                "response_tokens": usage.candidates_token_count,
-                "total_tokens": usage.total_token_count,
-            }
-        )
+    # chack for response metadata.
+    if not (hasattr(response, "usage_metadata") and response.usage_metadata):
+        raise GeminiGeneralError(f"Response is missing metadata.")
 
     return TextAssessment(
         errors=response_model.errors,
         summary=response_model.summary,
-        processing_time=metadata["processing_time"],
-        tokens_used=metadata["total_tokens"] or 0,  # Use 0 if None
+        processing_time=processing_time,
+        tokens_used=response.usage_metadata.total_token_count or 0,  # Use 0 if None
     )
 
 
