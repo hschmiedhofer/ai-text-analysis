@@ -1,39 +1,16 @@
-import pathlib
 import os
-from typing import Literal
+import pathlib
+import time
+from typing import Any, Literal
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types, Client
-from google.genai.chats import Chat
-from google.genai.types import Tool, GenerateContentConfig, GoogleSearch, File
 from google.genai import errors as api_exceptions
 from pydantic import BaseModel
-
-
-import logging
-
-
-# TODO check if folder exists
-logger_level = logging.ERROR
-logger_file = "logs/logs.log"
-logger_formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-logger.setLevel(level=logger_level)
-try:
-    file_handler = logging.FileHandler(logger_file)
-    file_handler.setLevel(logging.DEBUG)  # Log DEBUG and above to file
-    file_handler.setFormatter(logger_formatter)
-    logger.addHandler(file_handler)
-except PermissionError:
-    logger.error("Could not open log file due to permissions.")
 
 
 load_dotenv()  # Load environment variables from .env file
 
 # Get the API key from environment variable
-# TODO would this be something for the __init__.py file?
 GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("No GOOGLE_API_KEY found in environment variables.")
@@ -47,84 +24,116 @@ if not GEMINI_MODEL_ID:
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# Define a custom exception (optional, but good practice)
-class SummarizationError(Exception):
+# *----------------
+
+
+# custom exception (optional, but good practice)
+class GeminiGeneralError(Exception):
     pass
-
-
-def summarize_text(text_to_summarize: str, addt_prompt="Summarize this text"):
-    assert GEMINI_MODEL_ID is not None
-
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL_ID, contents=[addt_prompt, text_to_summarize]
-        )
-    except api_exceptions.APIError as e:
-        logger.error(
-            f"Gemini API call failed during text summarization: {e}", exc_info=True
-        )
-        # Option 1: Re-raise as a custom error for specific handling upstream
-        raise SummarizationError(f"API call failed: {e}") from e
-
-    # --- If the API call succeeded, proceed to check the response ---
-    if not response.text:
-        raise ValueError("Failed to summarize text.")
-
-    return response.text
 
 
 class ErrorDetail(BaseModel):
     original_error_text: str
     corrected_text: str
-    error_category: Literal["spelling", "grammar"]
+    error_category: Literal["spelling", "grammar", "style"]
+    error_description: str
+    error_position: int
+    error_context: str
 
 
-class ListOfErrors(BaseModel):
+# expected response from the api
+class ApiResponse(BaseModel):
     errors: list[ErrorDetail]
+    summary: str
 
 
-def identify_errors_in_text(text: str):
+# api response enhanced with api request metadata.
+class TextAssessment(ApiResponse):
+    processing_time: float
+    tokens_used: int
+
+
+def identify_errors_in_text(
+    text: str,
+) -> tuple[ApiResponse, dict[str, Any]]:
     assert GEMINI_MODEL_ID is not None
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    prompt = """
+            You are an expert proof-reader. Find errors in the following document. 
+            For each error, include error_context that starts with the original_error_text 
+            and adds the following 50 characters from the original text. 
+            Do not add characters that came before the original_error_text!!
+            Additionally, return your summary of the text quality.
+
+    """
 
     try:
+        start_time = time.time()
         response = client.models.generate_content(
             model=GEMINI_MODEL_ID,
-            # model="nope",
-            contents=[
-                "You are an expert proof-reader. Find spelling errors in the following document",
-                text,
-            ],
+            contents=[prompt, text],
             config={
                 "response_mime_type": "application/json",
-                "response_schema": ListOfErrors,
+                "response_schema": ApiResponse,
             },
         )
+        end_time = time.time()
+        processing_time = end_time - start_time
     except api_exceptions.APIError as e:
-        logger.error(
-            f"Gemini API call failed during text summarization: {e}", exc_info=True
+        # re-raise as a custom error for specific handling upstream
+        raise GeminiGeneralError(f"API call failed: {e}") from e
+
+    # Collect metadata
+    metadata = {
+        "processing_time": processing_time,
+        "prompt_tokens": None,
+        "response_tokens": None,
+        "total_tokens": None,
+    }
+
+    # Access usage metadata
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        usage = response.usage_metadata
+        metadata.update(
+            {
+                "prompt_tokens": usage.prompt_token_count,
+                "response_tokens": usage.candidates_token_count,
+                "total_tokens": usage.total_token_count,
+            }
         )
-        # Option 1: Re-raise as a custom error for specific handling upstream
-        raise SummarizationError(f"API call failed: {e}") from e
 
-    # Use the response as a JSON string.
-    print(response.text)
-
-    response_parsed: ListOfErrors = response.parsed
-
-    print(response_parsed)
+    return (response.parsed, metadata)
 
 
 #  make the script executable for testing
 if __name__ == "__main__":
 
-    editorial = """
-    The Urgent Need for Media Literasy in the Digital Age
-    The prolifiration of information, and misinfromation, online has reach a critical junkture. No longer can we pasively consume content; active dissernment is paramont. The ease with wich falsehoods can be dressed as truth and rapidly diseminated pose a signifcant threat to informed public discurse and even democratic proceses.
-    Investing in robust media literacy educasion from an early age are not merely benefiscial, but esential. We must equip citizen's with the critcal thinking skill's to evaluate sources, identify bias, and understanding the motivasions behind the content they encunter. This isnt about cencorship, but empowermen. An informed populus, capible of distinguish credible informasion from propaganda or clickbait, is the stronggest defense against manipulasion. The responsability also lie with platfroms to promote transparancy and curb the algorithmic amplificasion of harmfull content. But ultimatly, fostering a culture of critical inquiry are our collective societal duty. The future of informed decision-making depend on it.
-    """
+    # read article from test data
+    faulty_article = ""
+    article_file_path = "testdata/faulty_article.txt"
+    try:
+        with open(article_file_path, "r") as f:
+            faulty_article = f.read()
+    except Exception as e:
+        print(f"Error reading file '{article_file_path}': {e}")
+        exit(1)
 
-    summary = identify_errors_in_text(editorial)
+    # query the api for the correction
+    api_response, api_metadata = identify_errors_in_text(faulty_article)
 
-    print(summary)
+    final = TextAssessment(
+        errors=api_response.errors,
+        summary=api_response.summary,
+        processing_time=api_metadata["processing_time"],
+        tokens_used=api_metadata["total_tokens"] or 0,  # Use 0 if None
+    )
+
+    # write result to file
+    output_file_path = "logs/identified_errors.json"
+    try:
+        with open(output_file_path, "w") as f:
+            f.write(final.model_dump_json(indent=2))
+        print(f"Successfully exported errors to {output_file_path}")
+    except IOError as e:
+        print(f"Failed to write errors to JSON file: {e}")
+        exit(1)
