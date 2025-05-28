@@ -12,3 +12,4 @@ wheels/
 .env
 logs
 local_tests
+database.db
