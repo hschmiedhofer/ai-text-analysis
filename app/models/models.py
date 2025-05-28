@@ -1,8 +1,9 @@
 from typing import Literal
 from pydantic import BaseModel
+from sqlmodel import Field, SQLModel
 
 
-class ErrorDetail(BaseModel):
+class ErrorDetail(SQLModel):
     original_error_text: str
     corrected_text: str
     error_category: Literal["spelling", "grammar", "style"]
@@ -12,7 +13,7 @@ class ErrorDetail(BaseModel):
 
 
 # expected response from the api
-class ApiResponse(BaseModel):
+class ApiResponse(SQLModel):
     errors: list[ErrorDetail]
     summary: str
 
@@ -21,3 +22,8 @@ class ApiResponse(BaseModel):
 class TextAssessment(ApiResponse):
     processing_time: float
     tokens_used: int
+
+
+class TextAssessmentDB(TextAssessment, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    errors: str = Field(str)
