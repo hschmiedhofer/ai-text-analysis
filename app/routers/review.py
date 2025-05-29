@@ -1,6 +1,12 @@
 from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException, Query
-from models.models import TextAssessment, TextAssessmentDB
+from models.models import (
+    ErrorCategoryEnum,
+    ErrorDetail,
+    ErrorDetailDB,
+    TextAssessment,
+    TextAssessmentDB,
+)
 from services.gemini import identify_errors_in_text, GeminiGeneralError
 from http import HTTPStatus
 from services.database import SessionDep
@@ -22,27 +28,28 @@ async def check_article(
     except GeminiGeneralError as e:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    errors = returndata.errors
-    errors_json = json.dumps([error.model_dump() for error in errors])
-    test = TextAssessmentDB(
+    # commit general assessment (yet without errors) to db to have an id
+    a = TextAssessmentDB(
         summary=returndata.summary,
-        processing_time=returndata.processing_time,
         tokens_used=returndata.tokens_used,
-        errors=errors_json,
+        processing_time=returndata.processing_time,
     )
-    session.add(test)
+    session.add(a)
     session.commit()
-    session.refresh(test)
+
+    for e in returndata.errors:
+        curr_error = ErrorDetailDB(
+            original_error_text=e.original_error_text,
+            corrected_text=e.corrected_text,
+            error_category=e.error_category,
+            error_description=e.error_description,
+            error_position=e.error_position,
+            error_context=e.error_context,
+            assessment_id=a.id,  # use id from committed assessment
+        )
+        session.add(curr_error)
+        session.commit()
+
+    session.refresh(a)  # what's the use of this?
 
     return returndata
-
-
-@router.get("/")
-def read_entries(
-    session: SessionDep,
-    offset: int = 0,
-    limit: Annotated[int, Query(le=100)] = 100,
-) -> list[TextAssessmentDB]:
-    entries = session.exec(select(TextAssessmentDB).offset(offset).limit(limit)).all()
-    entries = list(entries)
-    return entries

@@ -1,6 +1,10 @@
 from typing import Annotated
 from fastapi import Depends
-from sqlmodel import SQLModel, Session, create_engine
+
+from sqlalchemy import table
+from sqlmodel import Relationship, SQLModel, Session, create_engine, Field
+
+from models.models import ErrorDetail, TextAssessment
 
 
 sqlite_file_name = "database.db"
