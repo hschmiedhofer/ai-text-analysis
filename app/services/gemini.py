@@ -1,12 +1,9 @@
 import os
 import time
-from enum import Enum
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as api_exceptions
 from models.models import ApiResponse, ErrorDetail, TextAssessment
-
-# from models.models import TextAssessment, ApiResponse
 
 
 load_dotenv()  # Load environment variables from .env file

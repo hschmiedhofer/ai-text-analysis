@@ -1,10 +1,9 @@
-import sys
 from fastapi import FastAPI
+from fastapi.security import HTTPBearer
 from services.database import create_db_and_tables
 from routers import review, test
 from fastapi.responses import HTMLResponse
 
-# print(sys.executable)
 
 # create fastapi app
 app = FastAPI()

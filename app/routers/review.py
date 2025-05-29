@@ -1,5 +1,6 @@
 from typing import Annotated
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from services.security import verify_api_key
 from models.models import (
     ErrorCategoryEnum,
     ErrorDetail,
@@ -14,10 +15,11 @@ import json
 from sqlmodel import select
 
 router = APIRouter(
-    prefix="/review", tags=["review"]
+    prefix="/review", tags=["review"], dependencies=[Depends(verify_api_key)]
 )  # todo add dependencies and responses
 
 
+# $ endpoint services
 @router.post("/")
 async def check_article(
     article: Annotated[str, Body()], session: SessionDep
@@ -55,6 +57,25 @@ async def check_article(
     return returndata
 
 
+@router.get("/{id}")
+async def retrieve_assessment(id: int, session: SessionDep) -> TextAssessment:
+    statement = select(TextAssessmentDB).where(TextAssessmentDB.id == id)
+    result = session.exec(statement)
+    review = result.one()
+
+    return convert_db_to_response(review)
+
+
+@router.get("/")
+async def retrieve_assessment_all(session: SessionDep) -> list[TextAssessment]:
+    statement = select(TextAssessmentDB)
+    result = session.exec(statement)
+    reviews = list(result.all())
+
+    return [convert_db_to_response(review) for review in reviews]
+
+
+# $ util functions
 def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
     """Convert TextAssessmentDB to TextAssessment response model."""
     error_details = [
@@ -75,21 +96,3 @@ def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
         tokens_used=assessment_db.tokens_used,
         errors=error_details,
     )
-
-
-@router.get("/{id}")
-async def retrieve_assessment(id: int, session: SessionDep) -> TextAssessment:
-    statement = select(TextAssessmentDB).where(TextAssessmentDB.id == id)
-    result = session.exec(statement)
-    review = result.one()
-
-    return convert_db_to_response(review)
-
-
-@router.get("/")
-async def retrieve_assessment_all(session: SessionDep) -> list[TextAssessment]:
-    statement = select(TextAssessmentDB)
-    result = session.exec(statement)
-    reviews = list(result.all())
-
-    return [convert_db_to_response(review) for review in reviews]
