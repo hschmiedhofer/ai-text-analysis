@@ -1,9 +1,12 @@
 import os
 import time
+from enum import Enum
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as api_exceptions
-from models.models import TextAssessment, ApiResponse
+from models.models import ApiResponse, ErrorDetail, TextAssessment
+
+# from models.models import TextAssessment, ApiResponse
 
 
 load_dotenv()  # Load environment variables from .env file
@@ -62,16 +65,41 @@ def identify_errors_in_text(
     else:
         raise GeminiGeneralError(f"Invalid response type: {type(response.parsed)}")
 
-    # chack for response metadata.
+    # check for response metadata.
     if not (hasattr(response, "usage_metadata") and response.usage_metadata):
         raise GeminiGeneralError(f"Response is missing metadata.")
 
-    return TextAssessment(
+    assessment = TextAssessment(
         errors=response_model.errors,
         summary=response_model.summary,
         processing_time=processing_time,
         tokens_used=response.usage_metadata.total_token_count or 0,  # Use 0 if None
     )
+
+    # validate the resulting error locations and drop incorrectly described errors
+    validate_assessment(text, assessment)
+
+    return assessment
+
+
+def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
+    errors_validated: list[ErrorDetail] = []
+    for e in assessment.errors:
+        try:
+            # location of error in context
+            idx_error_in_context = e.error_context.index(e.original_error_text)
+            # location of context in original text
+            idx_context_in_orig = text_orig.index(e.error_context)
+            # final location
+            idx = idx_error_in_context + idx_context_in_orig
+            print(f"actual location: {idx} / suggested location: {e.error_position}")
+            # correct index and store
+            e.error_position = idx
+            errors_validated.append(e)
+        except ValueError:
+            print(f"dropped incorrectly specified error: {e}")
+
+    assessment.errors = errors_validated
 
 
 #  make the script executable for testing
@@ -88,13 +116,16 @@ if __name__ == "__main__":
         exit(1)
 
     # query the api for the correction
-    final_assessment = identify_errors_in_text(faulty_article)
+    api_assessment = identify_errors_in_text(faulty_article)
+
+    # validate the resulting error locations and drop incorrectly described errors
+    validate_assessment(faulty_article, api_assessment)
 
     # write result to file
     output_file_path = "logs/identified_errors.json"
     try:
         with open(output_file_path, "w") as f:
-            f.write(final_assessment.model_dump_json(indent=2))
+            f.write(api_assessment.model_dump_json(indent=2))
         print(f"Successfully exported errors to {output_file_path}")
     except IOError as e:
         print(f"Failed to write errors to JSON file: {e}")

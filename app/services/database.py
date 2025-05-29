@@ -1,11 +1,6 @@
 from typing import Annotated
 from fastapi import Depends
-
-from sqlalchemy import table
-from sqlmodel import Relationship, SQLModel, Session, create_engine, Field
-
-from models.models import ErrorDetail, TextAssessment
-
+from sqlmodel import SQLModel, Session, create_engine
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
