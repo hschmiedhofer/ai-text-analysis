@@ -43,13 +43,3 @@ def read_single_entry(entry_id: int, session: SessionDep) -> TestEntry:
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     return entry
-
-
-# @router.delete("/{hero_id}")
-# def delete_hero(hero_id: int, session: SessionDep):
-#     hero = session.get(Hero, hero_id)
-#     if not hero:
-#         raise HTTPException(status_code=404, detail="Hero not found")
-#     session.delete(hero)
-#     session.commit()
-#     return {"ok": True}

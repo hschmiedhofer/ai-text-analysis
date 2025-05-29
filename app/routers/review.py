@@ -53,3 +53,43 @@ async def check_article(
     session.refresh(a)  # what's the use of this?
 
     return returndata
+
+
+def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
+    """Convert TextAssessmentDB to TextAssessment response model."""
+    error_details = [
+        ErrorDetail(
+            original_error_text=error.original_error_text,
+            corrected_text=error.corrected_text,
+            error_category=error.error_category,
+            error_description=error.error_description,
+            error_position=error.error_position,
+            error_context=error.error_context,
+        )
+        for error in assessment_db.errors
+    ]
+
+    return TextAssessment(
+        summary=assessment_db.summary,
+        processing_time=assessment_db.processing_time,
+        tokens_used=assessment_db.tokens_used,
+        errors=error_details,
+    )
+
+
+@router.get("/{id}")
+async def retrieve_assessment(id: int, session: SessionDep) -> TextAssessment:
+    statement = select(TextAssessmentDB).where(TextAssessmentDB.id == id)
+    result = session.exec(statement)
+    review = result.one()
+
+    return convert_db_to_response(review)
+
+
+@router.get("/")
+async def retrieve_assessment_all(session: SessionDep) -> list[TextAssessment]:
+    statement = select(TextAssessmentDB)
+    result = session.exec(statement)
+    reviews = list(result.all())
+
+    return [convert_db_to_response(review) for review in reviews]
