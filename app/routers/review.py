@@ -32,6 +32,7 @@ async def check_article(
     )
     session.add(a)
     session.commit()
+    session.refresh(a)  # Refresh to get the assigned ID
 
     for e in returndata.errors:
         curr_error = ErrorDetailDB(
@@ -44,9 +45,9 @@ async def check_article(
             assessment_id=a.id,  # use id from committed assessment
         )
         session.add(curr_error)
-        session.commit()
 
-    session.refresh(a)  # what's the use of this?
+    session.commit()
+    # session.refresh(a)  # what's the use of this?
 
     return returndata
 
