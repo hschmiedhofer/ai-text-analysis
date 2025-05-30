@@ -1,17 +1,10 @@
 from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from services.security import verify_api_key
-from models.models import (
-    ErrorCategoryEnum,
-    ErrorDetail,
-    ErrorDetailDB,
-    TextAssessment,
-    TextAssessmentDB,
-)
-from services.gemini import identify_errors_in_text, GeminiGeneralError
+from models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
+from services.llm_api import identify_errors_in_text, GeminiGeneralError
 from http import HTTPStatus
 from services.database import SessionDep
-import json
 from sqlmodel import select
 
 router = APIRouter(
@@ -26,12 +19,13 @@ async def check_article(
 ) -> TextAssessment:
 
     try:
-        returndata = identify_errors_in_text(article)
+        returndata = await identify_errors_in_text(article)
     except GeminiGeneralError as e:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     # commit general assessment (yet without errors) to db to have an id
     a = TextAssessmentDB(
+        text_submitted=returndata.text_submitted,
         summary=returndata.summary,
         tokens_used=returndata.tokens_used,
         processing_time=returndata.processing_time,
@@ -91,6 +85,7 @@ def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
     ]
 
     return TextAssessment(
+        text_submitted=assessment_db.text_submitted,
         summary=assessment_db.summary,
         processing_time=assessment_db.processing_time,
         tokens_used=assessment_db.tokens_used,

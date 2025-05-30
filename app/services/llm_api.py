@@ -1,9 +1,9 @@
 import os
 import time
-from dotenv import load_dotenv
-from google import genai
-from google.genai import errors as api_exceptions
 from models.models import ApiResponse, ErrorDetail, TextAssessment
+from pydantic_ai import Agent
+import logfire
+from dotenv import load_dotenv
 
 
 load_dotenv()  # Load environment variables from .env file
@@ -18,59 +18,56 @@ GEMINI_MODEL_ID = os.getenv("MODEL_ID")
 if not GEMINI_MODEL_ID:
     raise ValueError("No MODEL_ID found in environment variables.")
 
-# create gemini client
-client = genai.Client(api_key=GEMINI_API_KEY)
-
 
 # custom exception (optional, but good practice)
 class GeminiGeneralError(Exception):
     pass
 
 
-def identify_errors_in_text(
-    text: str,
-) -> TextAssessment:
-    assert GEMINI_MODEL_ID is not None
+# TODO do we need this?
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire="if-token-present")
+logfire.instrument_pydantic_ai()
 
+# create model communication agent
+# TODO use gemini key
+agent = Agent(GEMINI_MODEL_ID, output_type=ApiResponse)
+
+
+async def identify_errors_in_text(text: str) -> TextAssessment:
     prompt = """
-            You are an expert proof-reader. Find errors in the following document. 
-            For each error, include error_context that starts with the original_error_text 
-            and adds the following 50 characters from the original text. 
-            Do not add characters that came before the original_error_text!!
-            Additionally, return your summary of the text quality.
+        You are an expert proof-reader. Find errors in the following document. 
+        For each error, include error_context that starts with the original_error_text 
+        and adds the following 50 characters from the original text. 
+        Do not add characters that came before the original_error_text!!
+        Additionally, return your summary of the text quality.
     """
 
     try:
         start_time = time.time()
-        response = client.models.generate_content(
-            model=GEMINI_MODEL_ID,
-            contents=[prompt, text],
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": ApiResponse,
-            },
-        )
+        agent_response = await agent.run([prompt, text])
+        print(agent_response.output)
+        print(agent_response.usage())
         end_time = time.time()
         processing_time = end_time - start_time
-    except api_exceptions.APIError as e:
+    except Exception as e:
         # re-raise as a custom error for specific handling upstream
         raise GeminiGeneralError(f"API call failed: {e}")
 
-    # parse response to expected model
-    if isinstance(response.parsed, ApiResponse):
-        response_model = response.parsed
-    else:
-        raise GeminiGeneralError(f"Invalid response type: {type(response.parsed)}")
-
-    # check for response metadata.
-    if not (hasattr(response, "usage_metadata") and response.usage_metadata):
-        raise GeminiGeneralError(f"Response is missing metadata.")
+    # validate api response
+    if not (
+        agent_response
+        and agent_response.output
+        and isinstance(agent_response.output, ApiResponse)
+    ):
+        raise GeminiGeneralError(f"Invalid response from API.")
 
     assessment = TextAssessment(
-        errors=response_model.errors,
-        summary=response_model.summary,
+        text_submitted=text,
+        summary=agent_response.output.summary,
         processing_time=processing_time,
-        tokens_used=response.usage_metadata.total_token_count or 0,  # Use 0 if None
+        tokens_used=agent_response.usage().total_tokens or 0,
+        errors=agent_response.output.errors,
     )
 
     # validate the resulting error locations and drop incorrectly described errors
@@ -99,9 +96,7 @@ def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
     assessment.errors = errors_validated
 
 
-#  make the script executable for testing
-if __name__ == "__main__":
-
+async def test():
     # read article from test data
     faulty_article = ""
     article_file_path = "testdata/faulty_article.txt"
@@ -113,10 +108,7 @@ if __name__ == "__main__":
         exit(1)
 
     # query the api for the correction
-    api_assessment = identify_errors_in_text(faulty_article)
-
-    # validate the resulting error locations and drop incorrectly described errors
-    validate_assessment(faulty_article, api_assessment)
+    api_assessment = await identify_errors_in_text(faulty_article)
 
     # write result to file
     output_file_path = "logs/identified_errors.json"
@@ -127,3 +119,10 @@ if __name__ == "__main__":
     except IOError as e:
         print(f"Failed to write errors to JSON file: {e}")
         exit(1)
+
+
+#  make the script executable for testing
+if __name__ == "__main__":
+    import asyncio
+
+    asyncio.run(test())
