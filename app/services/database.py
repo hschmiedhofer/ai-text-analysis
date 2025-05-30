@@ -18,4 +18,5 @@ def get_session():
         yield session
 
 
+# type alias for session that runs get_session()
 SessionDep = Annotated[Session, Depends(get_session)]

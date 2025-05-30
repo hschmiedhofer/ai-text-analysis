@@ -1,6 +1,6 @@
 import os
 import time
-from models.models import ApiResponse, ErrorDetail, TextAssessment
+from ..models.models import ApiResponse, ErrorDetail, TextAssessment
 from pydantic_ai import Agent
 import logfire
 from dotenv import load_dotenv

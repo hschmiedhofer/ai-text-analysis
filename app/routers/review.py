@@ -1,10 +1,10 @@
 from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from services.security import verify_api_key
-from models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
-from services.llm_api import identify_errors_in_text, GeminiGeneralError
+from ..services.security import verify_api_key
+from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
+from ..services.llm_api import identify_errors_in_text, GeminiGeneralError
 from http import HTTPStatus
-from services.database import SessionDep
+from ..services.database import SessionDep
 from sqlmodel import select
 
 router = APIRouter(

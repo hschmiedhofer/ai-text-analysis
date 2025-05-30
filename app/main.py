@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.security import HTTPBearer
-from services.database import create_db_and_tables
-from routers import review
-from fastapi.responses import HTMLResponse
 
+from .services.database import create_db_and_tables
+from .routers import review
+from fastapi.responses import HTMLResponse
 
 # create fastapi app
 app = FastAPI()
