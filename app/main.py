@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.security import HTTPBearer
 from services.database import create_db_and_tables
-from routers import review, test
+from routers import review
 from fastapi.responses import HTMLResponse
 
 
@@ -16,7 +16,6 @@ def on_startup():
 
 # add routers
 app.include_router(review.router)
-app.include_router(test.router)
 
 
 # add root level endpoint
