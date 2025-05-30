@@ -36,18 +36,23 @@ agent = Agent(GEMINI_MODEL_ID, output_type=ApiResponse)
 
 async def identify_errors_in_text(text: str) -> TextAssessment:
     prompt = """
-        You are an expert proof-reader. Find errors in the following document. 
-        For each error, include error_context that starts with the original_error_text 
-        and adds the following 50 characters from the original text. 
-        Do not add characters that came before the original_error_text!!
-        Additionally, return your summary of the text quality.
-    """
+        You are an expert proof-reader. I gave you an article. I want you to scan it for errors.
+
+        For each error you found, supply the following information:
+        - original error text
+        - corrected error text
+        - category of the error
+        - location of the first character of the original error text. Character indexes start at 0.
+        - verbatim description of the error
+        - context. here, give me the original error plus some leading and trailing characters.In total, this text must be a subset of the supplied article.
+
+        With regard to the entire article, give me:
+        - a summary of the text quality.
+        """
 
     try:
         start_time = time.time()
         agent_response = await agent.run([prompt, text])
-        print(agent_response.output)
-        print(agent_response.usage())
         end_time = time.time()
         processing_time = end_time - start_time
     except Exception as e:
