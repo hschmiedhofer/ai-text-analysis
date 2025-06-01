@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from ..services.security import verify_api_key
 from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
-from ..services.llm_api import identify_errors_in_text, GeminiGeneralError
+from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
 from ..services.database import SessionDep
 from sqlmodel import select, desc
 
