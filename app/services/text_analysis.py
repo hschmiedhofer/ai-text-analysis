@@ -1,9 +1,10 @@
 import os
 import time
-from ..models.models import ApiResponse, ErrorDetail, TextAssessment
 from pydantic_ai import Agent
-import logfire
+from pydantic_ai.models.gemini import GeminiModel
+from pydantic_ai.providers.google_gla import GoogleGLAProvider
 from dotenv import load_dotenv
+from ..models.models import ApiResponse, ErrorDetail, TextAssessment
 
 
 load_dotenv()  # Load environment variables from .env file
@@ -24,14 +25,9 @@ class GeminiGeneralError(Exception):
     pass
 
 
-# TODO do we need this?
-# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
-logfire.configure(send_to_logfire="if-token-present")
-logfire.instrument_pydantic_ai()
-
 # create model communication agent
-# TODO use gemini key
-agent = Agent(GEMINI_MODEL_ID, output_type=ApiResponse)
+model = GeminiModel(GEMINI_MODEL_ID, provider=GoogleGLAProvider(api_key=GEMINI_API_KEY))
+agent = Agent(model, output_type=ApiResponse)
 
 
 async def identify_errors_in_text(text: str) -> TextAssessment:
