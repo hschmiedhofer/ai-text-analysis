@@ -1,40 +1,127 @@
 from typing import Annotated
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from ..services.security import verify_api_key
 from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
 from ..services.llm_api import identify_errors_in_text, GeminiGeneralError
-from http import HTTPStatus
 from ..services.database import SessionDep
-from sqlmodel import select
+from sqlmodel import select, desc
 
 router = APIRouter(
-    prefix="/review", tags=["review"], dependencies=[Depends(verify_api_key)]
-)  # todo add dependencies and responses
+    prefix="/review",
+    tags=["Text Analysis"],
+    dependencies=[Depends(verify_api_key)],
+    responses={
+        401: {
+            "description": "Authentication failed - invalid or missing API key",
+            "content": {"application/json": {"example": {"detail": "Invalid API key"}}},
+        },
+        500: {
+            "description": "Internal server error - service temporarily unavailable",
+            "content": {
+                "application/json": {"example": {"detail": "Internal server error"}}
+            },
+        },
+    },
+)
 
 
 # $ endpoint services
-@router.post("/")
-async def check_article(
-    article: Annotated[str, Body()], session: SessionDep
+@router.post(
+    "/",
+    summary="Analyze text for errors",
+    description="Submit text for grammatical and stylistic analysis using AI",
+    response_description="Analysis results with identified errors and corrections",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {
+            "description": "Text analysis completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "text_submitted": "This are wrong grammar.",
+                        "summary": "Text contains 1 grammatical error.",
+                        "processing_time": 2.34,
+                        "tokens_used": 45,
+                        "errors": [
+                            {
+                                "original_error_text": "This are",
+                                "corrected_text": "This is",
+                                "error_category": "grammar",
+                                "error_description": "Subject-verb disagreement",
+                                "error_position": 0,
+                                "error_context": "This are wrong",
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid input text"},
+        422: {"description": "Text too long or empty"},
+        500: {"description": "AI analysis service unavailable"},
+    },
+)
+async def analyze_text(
+    article: Annotated[
+        str,
+        Body(
+            title="Text to Analyze",
+            description="The text content to analyze for grammatical and stylistic errors",
+            example="These are an example with deliberate airrors for testing.",
+            min_length=1,
+            max_length=50000,
+        ),
+    ],
+    session: SessionDep,
 ) -> TextAssessment:
+    """
+    Analyze text for grammatical and stylistic errors using AI.
 
+    This endpoint processes the submitted text through an AI language model
+    to identify errors, provide corrections, and store the analysis results
+    in the database for future retrieval.
+
+    **Features:**
+    - Identifies grammar, spelling, punctuation, and style errors
+    - Provides specific corrections and explanations
+    - Calculates precise error positions in the text
+    - Stores results for historical tracking
+
+    **Processing Steps:**
+    1. Validates input text length and content
+    2. Sends text to AI model for analysis
+    3. Stores assessment and errors in database
+    4. Returns structured results with error details
+    """
+    # Input validation
+    if not article.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Text cannot be empty or contain only whitespace",
+        )
+
+    # try to get assessment from LLM
     try:
-        returndata = await identify_errors_in_text(article)
+        analysis_result = await identify_errors_in_text(article)
     except GeminiGeneralError as e:
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Text analysis service is currently unavailable. Please try again later.",
+        )
 
-    # commit general assessment (yet without errors) to db to have an id
-    a = TextAssessmentDB(
-        text_submitted=returndata.text_submitted,
-        summary=returndata.summary,
-        tokens_used=returndata.tokens_used,
-        processing_time=returndata.processing_time,
+    # store assessment in database
+    assessment_db = TextAssessmentDB(
+        text_submitted=analysis_result.text_submitted,
+        summary=analysis_result.summary,
+        tokens_used=analysis_result.tokens_used,
+        processing_time=analysis_result.processing_time,
     )
-    session.add(a)
+    session.add(assessment_db)
     session.commit()
-    session.refresh(a)  # Refresh to get the assigned ID
+    session.refresh(assessment_db)  # Refresh to get the assigned ID
 
-    for e in returndata.errors:
+    # store individual errors in database
+    for e in analysis_result.errors:
         curr_error = ErrorDetailDB(
             original_error_text=e.original_error_text,
             corrected_text=e.corrected_text,
@@ -42,32 +129,138 @@ async def check_article(
             error_description=e.error_description,
             error_position=e.error_position,
             error_context=e.error_context,
-            assessment_id=a.id,  # use id from committed assessment
+            assessment_id=assessment_db.id,  # use id from committed assessment
         )
         session.add(curr_error)
 
+    # TODO what about db errors??
     session.commit()
-    # session.refresh(a)  # what's the use of this?
-
-    return returndata
+    return analysis_result
 
 
-@router.get("/{id}")
-async def retrieve_assessment(id: int, session: SessionDep) -> TextAssessment:
-    statement = select(TextAssessmentDB).where(TextAssessmentDB.id == id)
+@router.get(
+    "/{assessment_id}",
+    summary="Retrieve specific assessment",
+    description="Get detailed results of a previously completed text analysis",
+    response_description="Complete assessment with all identified errors",
+    responses={
+        200: {
+            "description": "Assessment retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "text_submitted": "Sample analyzed text...",
+                        "summary": "Overall text quality assessment",
+                        "processing_time": 1.23,
+                        "tokens_used": 42,
+                        "errors": [],
+                    }
+                }
+            },
+        },
+        404: {"description": "Assessment not found"},
+        422: {"description": "Invalid assessment ID format"},
+    },
+)
+async def get_assessment(
+    assessment_id: Annotated[
+        int,
+        Path(
+            title="Assessment ID",
+            description="Unique identifier of the text assessment to retrieve",
+            example=123,
+            ge=1,
+        ),
+    ],
+    session: SessionDep,
+) -> TextAssessment:
+    """
+    Retrieve a specific text assessment by its ID.
+
+    Returns the complete analysis results including original text,
+    AI-generated summary, processing metadata, and detailed error list.
+
+    **Use Cases:**
+    - Review previous analysis results
+    - Display error details to users
+    - Track analysis history
+    """
+
+    statement = select(TextAssessmentDB).where(TextAssessmentDB.id == assessment_id)
     result = session.exec(statement)
-    review = result.one()
 
-    return convert_db_to_response(review)
+    try:
+        assessment_db = result.one()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assessment with ID {assessment_id} not found",
+        )
+
+    return convert_db_to_response(assessment_db)
 
 
-@router.get("/")
-async def retrieve_assessment_all(session: SessionDep) -> list[TextAssessment]:
-    statement = select(TextAssessmentDB)
+@router.get(
+    "/",
+    summary="List all assessments",
+    description="Retrieve a list of all completed text analyses",
+    response_description="List of assessments ordered by most recent first",
+    responses={
+        200: {
+            "description": "Assessments retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "text_submitted": "First analyzed text...",
+                            "summary": "Contains 2 errors",
+                            "processing_time": 1.5,
+                            "tokens_used": 38,
+                            "errors": [],
+                        },
+                        {
+                            "text_submitted": "Second analyzed text...",
+                            "summary": "High quality text",
+                            "processing_time": 0.8,
+                            "tokens_used": 25,
+                            "errors": [],
+                        },
+                    ]
+                }
+            },
+        }
+    },
+)
+async def list_assessments(
+    session: SessionDep,
+    limit: Annotated[
+        int,
+        Query(
+            title="Result Limit",
+            description="Maximum number of assessments to return",
+            example=50,
+            ge=1,
+            le=1000,
+        ),
+    ] = 100,
+) -> list[TextAssessment]:
+    """
+    Retrieve all completed text assessments.
+
+    Returns assessments ordered by creation date (most recent first).
+    Useful for displaying analysis history or generating reports.
+
+    **Query Parameters:**
+    - limit: Maximum number of results (1-1000, default: 100)
+    """
+
+    statement = (
+        select(TextAssessmentDB).order_by(desc(TextAssessmentDB.id)).limit(limit)
+    )
     result = session.exec(statement)
-    reviews = list(result.all())
+    assessments_db = list(result.all())
 
-    return [convert_db_to_response(review) for review in reviews]
+    return [convert_db_to_response(assessment) for assessment in assessments_db]
 
 
 # $ util functions
