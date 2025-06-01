@@ -9,7 +9,7 @@ from sqlmodel import select, desc
 router = APIRouter(
     prefix="/review",
     tags=["Text Analysis"],
-    dependencies=[Depends(verify_api_key)],
+    # dependencies=[Depends(verify_api_key)], #! ATTENTION
     responses={
         401: {
             "description": "Authentication failed - invalid or missing API key",
@@ -67,7 +67,7 @@ async def analyze_text(
         Body(
             title="Text to Analyze",
             description="The text content to analyze for grammatical and stylistic errors",
-            example="These are an example with deliberate airrors for testing.",
+            example="Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.",
             min_length=1,
             max_length=50000,
         ),
@@ -123,12 +123,12 @@ async def analyze_text(
     # store individual errors in database
     for e in analysis_result.errors:
         curr_error = ErrorDetailDB(
-            original_error_text=e.original_error_text,
-            corrected_text=e.corrected_text,
-            error_category=e.error_category,
-            error_description=e.error_description,
-            error_position=e.error_position,
-            error_context=e.error_context,
+            text_original=e.text_original,
+            text_corrected=e.text_corrected,
+            category=e.category,
+            description=e.description,
+            position=e.position,
+            context=e.context,
             assessment_id=assessment_db.id,  # use id from committed assessment
         )
         session.add(curr_error)
@@ -268,12 +268,12 @@ def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
     """Convert TextAssessmentDB to TextAssessment response model."""
     error_details = [
         ErrorDetail(
-            original_error_text=error.original_error_text,
-            corrected_text=error.corrected_text,
-            error_category=error.error_category,
-            error_description=error.error_description,
-            error_position=error.error_position,
-            error_context=error.error_context,
+            text_original=error.text_original,
+            text_corrected=error.text_corrected,
+            category=error.category,
+            description=error.description,
+            position=error.position,
+            context=error.context,
         )
         for error in assessment_db.errors
     ]

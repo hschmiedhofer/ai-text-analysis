@@ -86,14 +86,14 @@ def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
     for e in assessment.errors:
         try:
             # location of error in context
-            idx_error_in_context = e.error_context.index(e.original_error_text)
+            idx_error_in_context = e.context.index(e.text_original)
             # location of context in original text
-            idx_context_in_orig = text_orig.index(e.error_context)
+            idx_context_in_orig = text_orig.index(e.context)
             # final location
             idx = idx_error_in_context + idx_context_in_orig
-            print(f"actual location: {idx} / suggested location: {e.error_position}")
+            print(f"actual location: {idx} / suggested location: {e.position}")
             # correct index and store
-            e.error_position = idx
+            e.position = idx
             errors_validated.append(e)
         except ValueError:
             print(f"dropped incorrectly specified error: {e}")
