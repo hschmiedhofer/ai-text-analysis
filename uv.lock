@@ -192,7 +192,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
-    { name = "google-genai" },
     { name = "pydantic-ai", extra = ["logfire"] },
     { name = "sqlmodel" },
 ]
@@ -200,7 +199,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
-    { name = "google-genai", specifier = ">=1.16.1" },
     { name = "pydantic-ai", extras = ["logfire"], specifier = ">=0.2.11" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
 ]
