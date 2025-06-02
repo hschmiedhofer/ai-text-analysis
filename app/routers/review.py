@@ -1,15 +1,16 @@
 from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
+from sqlalchemy.exc import NoResultFound
 from ..services.security import verify_api_key
 from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
-from ..services.llm_api import identify_errors_in_text, GeminiGeneralError
+from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
 from ..services.database import SessionDep
 from sqlmodel import select, desc
 
 router = APIRouter(
     prefix="/review",
     tags=["Text Analysis"],
-    dependencies=[Depends(verify_api_key)],
+    # dependencies=[Depends(verify_api_key)], #! ATTENTION
     responses={
         401: {
             "description": "Authentication failed - invalid or missing API key",
@@ -67,7 +68,7 @@ async def analyze_text(
         Body(
             title="Text to Analyze",
             description="The text content to analyze for grammatical and stylistic errors",
-            example="These are an example with deliberate airrors for testing.",
+            example="Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.",
             min_length=1,
             max_length=50000,
         ),
@@ -106,35 +107,42 @@ async def analyze_text(
     except GeminiGeneralError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Text analysis service is currently unavailable. Please try again later.",
+            detail=f"Text analysis service error: {e}",
         )
 
     # store assessment in database
-    assessment_db = TextAssessmentDB(
-        text_submitted=analysis_result.text_submitted,
-        summary=analysis_result.summary,
-        tokens_used=analysis_result.tokens_used,
-        processing_time=analysis_result.processing_time,
-    )
-    session.add(assessment_db)
-    session.commit()
-    session.refresh(assessment_db)  # Refresh to get the assigned ID
-
-    # store individual errors in database
-    for e in analysis_result.errors:
-        curr_error = ErrorDetailDB(
-            original_error_text=e.original_error_text,
-            corrected_text=e.corrected_text,
-            error_category=e.error_category,
-            error_description=e.error_description,
-            error_position=e.error_position,
-            error_context=e.error_context,
-            assessment_id=assessment_db.id,  # use id from committed assessment
+    try:
+        # store actual assessment
+        assessment_db = TextAssessmentDB(
+            text_submitted=analysis_result.text_submitted,
+            summary=analysis_result.summary,
+            tokens_used=analysis_result.tokens_used,
+            processing_time=analysis_result.processing_time,
         )
-        session.add(curr_error)
+        session.add(assessment_db)
+        session.commit()
+        session.refresh(assessment_db)  # Refresh to get the assigned ID
 
-    # TODO what about db errors??
-    session.commit()
+        # store dedicated individual errors
+        for e in analysis_result.errors:
+            curr_error = ErrorDetailDB(
+                text_original=e.text_original,
+                text_corrected=e.text_corrected,
+                category=e.category,
+                description=e.description,
+                position=e.position,
+                context=e.context,
+                assessment_id=assessment_db.id,  # use id from committed assessment
+            )
+            session.add(curr_error)
+
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save analysis results",
+        )
     return analysis_result
 
 
@@ -191,10 +199,15 @@ async def get_assessment(
 
     try:
         assessment_db = result.one()
-    except Exception:
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Assessment with ID {assessment_id} not found",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred",
         )
 
     return convert_db_to_response(assessment_db)
@@ -268,12 +281,12 @@ def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
     """Convert TextAssessmentDB to TextAssessment response model."""
     error_details = [
         ErrorDetail(
-            original_error_text=error.original_error_text,
-            corrected_text=error.corrected_text,
-            error_category=error.error_category,
-            error_description=error.error_description,
-            error_position=error.error_position,
-            error_context=error.error_context,
+            text_original=error.text_original,
+            text_corrected=error.text_corrected,
+            category=error.category,
+            description=error.description,
+            position=error.position,
+            context=error.context,
         )
         for error in assessment_db.errors
     ]

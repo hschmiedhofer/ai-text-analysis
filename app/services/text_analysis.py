@@ -1,10 +1,13 @@
 import os
 import time
-from ..models.models import ApiResponse, ErrorDetail, TextAssessment
-from pydantic_ai import Agent
-import logfire
+from pydantic_ai import Agent, AgentRunError
+from pydantic_ai.models.gemini import GeminiModel
+from pydantic_ai.providers.google_gla import GoogleGLAProvider
 from dotenv import load_dotenv
+import logging
+from ..models.models import ApiResponse, ErrorDetail, TextAssessment
 
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -14,7 +17,7 @@ if not GEMINI_API_KEY:
     raise ValueError("No GOOGLE_API_KEY found in environment variables.")
 
 # Get the model ID from environment variable
-GEMINI_MODEL_ID = os.getenv("MODEL_ID")
+GEMINI_MODEL_ID = os.getenv("GEMINI_MODEL_ID")
 if not GEMINI_MODEL_ID:
     raise ValueError("No MODEL_ID found in environment variables.")
 
@@ -24,14 +27,9 @@ class GeminiGeneralError(Exception):
     pass
 
 
-# TODO do we need this?
-# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
-logfire.configure(send_to_logfire="if-token-present")
-logfire.instrument_pydantic_ai()
-
 # create model communication agent
-# TODO use gemini key
-agent = Agent(GEMINI_MODEL_ID, output_type=ApiResponse)
+model = GeminiModel(GEMINI_MODEL_ID, provider=GoogleGLAProvider(api_key=GEMINI_API_KEY))
+agent = Agent(model, output_type=ApiResponse)
 
 
 async def identify_errors_in_text(text: str) -> TextAssessment:
@@ -56,22 +54,38 @@ async def identify_errors_in_text(text: str) -> TextAssessment:
         end_time = time.time()
         processing_time = end_time - start_time
     except Exception as e:
+        # categorize  error based on exception content
+        error_str = str(e).lower()
+        if "rate limit" in error_str or "quota" in error_str:
+            reason = "rate_limit_exceeded"
+        elif "timeout" in error_str:
+            reason = "request_timeout"
+        elif "authentication" in error_str or "unauthorized" in error_str:
+            reason = "authentication_failed"
+        elif "network" in error_str or "connection" in error_str:
+            reason = "network_error"
+        elif "invalid" in error_str and "key" in error_str:
+            reason = "invalid_api_key"
+        else:
+            reason = "unknown_api_error"
         # re-raise as a custom error for specific handling upstream
-        raise GeminiGeneralError(f"API call failed: {e}")
+        raise GeminiGeneralError(f"API call failed ({reason})")
 
     # validate api response
-    if not (
-        agent_response
-        and agent_response.output
-        and isinstance(agent_response.output, ApiResponse)
-    ):
+    if not isinstance(agent_response.output, ApiResponse):
         raise GeminiGeneralError(f"Invalid response from API.")
+
+    # safe token usage extraction
+    try:
+        tokens_used = agent_response.usage().total_tokens or 0
+    except (AttributeError, TypeError):
+        tokens_used = 0
 
     assessment = TextAssessment(
         text_submitted=text,
         summary=agent_response.output.summary,
         processing_time=processing_time,
-        tokens_used=agent_response.usage().total_tokens or 0,
+        tokens_used=tokens_used,
         errors=agent_response.output.errors,
     )
 
@@ -86,17 +100,17 @@ def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
     for e in assessment.errors:
         try:
             # location of error in context
-            idx_error_in_context = e.error_context.index(e.original_error_text)
+            idx_error_in_context = e.context.index(e.text_original)
             # location of context in original text
-            idx_context_in_orig = text_orig.index(e.error_context)
+            idx_context_in_orig = text_orig.index(e.context)
             # final location
             idx = idx_error_in_context + idx_context_in_orig
-            print(f"actual location: {idx} / suggested location: {e.error_position}")
+            logger.debug(f"\nactual location: {idx} / suggested location: {e.position}")
             # correct index and store
-            e.error_position = idx
+            e.position = idx
             errors_validated.append(e)
         except ValueError:
-            print(f"dropped incorrectly specified error: {e}")
+            logger.warning(f"\ndropped incorrectly specified error: {e}")
 
     assessment.errors = errors_validated
 

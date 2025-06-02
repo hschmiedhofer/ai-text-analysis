@@ -13,12 +13,12 @@ class ErrorCategoryEnum(str, Enum):
 
 
 class ErrorDetail(BaseModel):
-    original_error_text: str
-    corrected_text: str
-    error_category: ErrorCategoryEnum
-    error_description: str
-    error_position: int
-    error_context: str
+    text_original: str
+    text_corrected: str
+    category: ErrorCategoryEnum
+    description: str
+    position: int
+    context: str
 
 
 # expected response from the api
@@ -51,12 +51,12 @@ class TextAssessmentDB(SQLModel, table=True):
 class ErrorDetailDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
-    original_error_text: str
-    corrected_text: str
-    error_category: ErrorCategoryEnum
-    error_description: str
-    error_position: int
-    error_context: str
+    text_original: str
+    text_corrected: str
+    category: ErrorCategoryEnum
+    description: str
+    position: int
+    context: str
 
     assessment_id: int | None = Field(default=None, foreign_key="textassessmentdb.id")
     assessment: TextAssessmentDB = Relationship(back_populates="errors")
