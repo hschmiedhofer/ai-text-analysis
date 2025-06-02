@@ -1,5 +1,6 @@
 from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
+from sqlalchemy.exc import NoResultFound
 from ..services.security import verify_api_key
 from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
 from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
@@ -106,35 +107,42 @@ async def analyze_text(
     except GeminiGeneralError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Text analysis service is currently unavailable. Please try again later.",
+            detail=f"Text analysis service error: {e}",
         )
 
     # store assessment in database
-    assessment_db = TextAssessmentDB(
-        text_submitted=analysis_result.text_submitted,
-        summary=analysis_result.summary,
-        tokens_used=analysis_result.tokens_used,
-        processing_time=analysis_result.processing_time,
-    )
-    session.add(assessment_db)
-    session.commit()
-    session.refresh(assessment_db)  # Refresh to get the assigned ID
-
-    # store individual errors in database
-    for e in analysis_result.errors:
-        curr_error = ErrorDetailDB(
-            text_original=e.text_original,
-            text_corrected=e.text_corrected,
-            category=e.category,
-            description=e.description,
-            position=e.position,
-            context=e.context,
-            assessment_id=assessment_db.id,  # use id from committed assessment
+    try:
+        # store actual assessment
+        assessment_db = TextAssessmentDB(
+            text_submitted=analysis_result.text_submitted,
+            summary=analysis_result.summary,
+            tokens_used=analysis_result.tokens_used,
+            processing_time=analysis_result.processing_time,
         )
-        session.add(curr_error)
+        session.add(assessment_db)
+        session.commit()
+        session.refresh(assessment_db)  # Refresh to get the assigned ID
 
-    # TODO what about db errors??
-    session.commit()
+        # store dedicated individual errors
+        for e in analysis_result.errors:
+            curr_error = ErrorDetailDB(
+                text_original=e.text_original,
+                text_corrected=e.text_corrected,
+                category=e.category,
+                description=e.description,
+                position=e.position,
+                context=e.context,
+                assessment_id=assessment_db.id,  # use id from committed assessment
+            )
+            session.add(curr_error)
+
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save analysis results",
+        )
     return analysis_result
 
 
@@ -191,10 +199,15 @@ async def get_assessment(
 
     try:
         assessment_db = result.one()
-    except Exception:
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Assessment with ID {assessment_id} not found",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred",
         )
 
     return convert_db_to_response(assessment_db)
