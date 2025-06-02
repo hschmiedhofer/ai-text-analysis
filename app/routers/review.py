@@ -10,11 +10,17 @@ from sqlmodel import select, desc
 router = APIRouter(
     prefix="/review",
     tags=["Text Analysis"],
-    # dependencies=[Depends(verify_api_key)], #! ATTENTION
+    dependencies=[Depends(verify_api_key)],
     responses={
         401: {
             "description": "Authentication failed - invalid or missing API key",
             "content": {"application/json": {"example": {"detail": "Invalid API key"}}},
+        },
+        403: {
+            "description": "No authorization header provided",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         500: {
             "description": "Internal server error - service temporarily unavailable",
@@ -34,29 +40,7 @@ router = APIRouter(
     response_description="Analysis results with identified errors and corrections",
     status_code=status.HTTP_201_CREATED,
     responses={
-        201: {
-            "description": "Text analysis completed successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "text_submitted": "This are wrong grammar.",
-                        "summary": "Text contains 1 grammatical error.",
-                        "processing_time": 2.34,
-                        "tokens_used": 45,
-                        "errors": [
-                            {
-                                "original_error_text": "This are",
-                                "corrected_text": "This is",
-                                "error_category": "grammar",
-                                "error_description": "Subject-verb disagreement",
-                                "error_position": 0,
-                                "error_context": "This are wrong",
-                            }
-                        ],
-                    }
-                }
-            },
-        },
+        201: {"description": "Text analysis completed successfully"},
         400: {"description": "Invalid input text"},
         422: {"description": "Text too long or empty"},
         500: {"description": "AI analysis service unavailable"},
@@ -141,7 +125,7 @@ async def analyze_text(
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save analysis results",
+            detail="Database error occurred while storing analysis results",
         )
     return analysis_result
 
@@ -152,20 +136,7 @@ async def analyze_text(
     description="Get detailed results of a previously completed text analysis",
     response_description="Complete assessment with all identified errors",
     responses={
-        200: {
-            "description": "Assessment retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "text_submitted": "Sample analyzed text...",
-                        "summary": "Overall text quality assessment",
-                        "processing_time": 1.23,
-                        "tokens_used": 42,
-                        "errors": [],
-                    }
-                }
-            },
-        },
+        200: {"description": "Assessment retrieved successfully"},
         404: {"description": "Assessment not found"},
         422: {"description": "Invalid assessment ID format"},
     },
@@ -204,11 +175,6 @@ async def get_assessment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Assessment with ID {assessment_id} not found",
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error occurred",
-        )
 
     return convert_db_to_response(assessment_db)
 
@@ -218,31 +184,7 @@ async def get_assessment(
     summary="List all assessments",
     description="Retrieve a list of all completed text analyses",
     response_description="List of assessments ordered by most recent first",
-    responses={
-        200: {
-            "description": "Assessments retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "text_submitted": "First analyzed text...",
-                            "summary": "Contains 2 errors",
-                            "processing_time": 1.5,
-                            "tokens_used": 38,
-                            "errors": [],
-                        },
-                        {
-                            "text_submitted": "Second analyzed text...",
-                            "summary": "High quality text",
-                            "processing_time": 0.8,
-                            "tokens_used": 25,
-                            "errors": [],
-                        },
-                    ]
-                }
-            },
-        }
-    },
+    responses={200: {"description": "Assessments retrieved successfully"}},
 )
 async def list_assessments(
     session: SessionDep,

@@ -107,14 +107,6 @@ curl -X 'POST' \
 }
 ```
 
-### Health Check
-**GET** `/health`
-
-Returns API health status (no authentication required).
-
-```bash
-curl -X GET "http://localhost:8000/health"
-```
 
 ## Error Categories
 
