@@ -108,6 +108,7 @@ async def analyze_text(
             summary=analysis_result.summary,
             tokens_used=analysis_result.tokens_used,
             processing_time=analysis_result.processing_time,
+            created_at=analysis_result.created_at,
         )
         session.add(assessment_db)
         session.commit()
@@ -247,4 +248,5 @@ def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
         processing_time=assessment_db.processing_time,
         tokens_used=assessment_db.tokens_used,
         errors=error_details,
+        created_at=assessment_db.created_at,
     )

@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime, timezone
 from pydantic_ai import Agent, AgentRunError
 from pydantic_ai.models.gemini import GeminiModel
 from pydantic_ai.providers.google_gla import GoogleGLAProvider
@@ -87,6 +88,7 @@ async def identify_errors_in_text(text: str) -> TextAssessment:
         processing_time=processing_time,
         tokens_used=tokens_used,
         errors=agent_response.output.errors,
+        created_at=datetime.now(timezone.utc),
     )
 
     # validate the resulting error locations and drop incorrectly described errors

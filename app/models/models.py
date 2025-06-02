@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from sqlmodel import Field, Relationship, SQLModel
 from enum import Enum
+from datetime import datetime, timezone
+from typing import Annotated
 
 
 class ErrorCategoryEnum(str, Enum):
@@ -32,6 +34,7 @@ class TextAssessment(ApiResponse):
     text_submitted: str
     processing_time: float
     tokens_used: int
+    created_at: datetime
 
 
 # $ DB models
@@ -44,6 +47,7 @@ class TextAssessmentDB(SQLModel, table=True):
     processing_time: float
     summary: str
     tokens_used: int
+    created_at: datetime
 
     errors: list["ErrorDetailDB"] = Relationship(back_populates="assessment")
 
