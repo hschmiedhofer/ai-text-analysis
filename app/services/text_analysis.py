@@ -101,16 +101,46 @@ def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
         try:
             # location of error in context
             idx_error_in_context = e.context.index(e.text_original)
-            # location of context in original text
-            idx_context_in_orig = text_orig.index(e.context)
-            # final location
-            idx = idx_error_in_context + idx_context_in_orig
-            logger.debug(f"\nactual location: {idx} / suggested location: {e.position}")
-            # correct index and store
-            e.position = idx
+
+            # Find all possible context locations
+            context_positions = []
+            start = 0
+            while True:
+                pos = text_orig.find(e.context, start)
+                if pos == -1:
+                    break
+                context_positions.append(pos)
+                start = pos + 1
+
+            if not context_positions:
+                raise ValueError("Context not found in original text")
+
+            # Find the correct context position by checking which one gives valid error position
+            valid_position = None
+            for context_pos in context_positions:
+                calculated_pos = idx_error_in_context + context_pos
+                # Validate the position actually contains the error text
+                if (
+                    calculated_pos + len(e.text_original) <= len(text_orig)
+                    and text_orig[
+                        calculated_pos : calculated_pos + len(e.text_original)
+                    ]
+                    == e.text_original
+                ):
+                    valid_position = calculated_pos
+                    break
+
+            if valid_position is None:
+                raise ValueError("No valid position found for error")
+
+            logger.debug(
+                f"\nactual location: {valid_position} / suggested location: {e.position}"
+            )
+            e.position = valid_position
             errors_validated.append(e)
-        except ValueError:
-            logger.warning(f"\ndropped incorrectly specified error: {e}")
+
+        except ValueError as ve:
+            logger.warning(f"\ndropped incorrectly specified error: {e} - Reason: {ve}")
 
     assessment.errors = errors_validated
 
