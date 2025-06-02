@@ -1,28 +1,28 @@
 from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlalchemy.exc import NoResultFound
+from sqlmodel import select, desc
 from ..services.security import verify_api_key
 from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
 from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
 from ..services.database import SessionDep
-from sqlmodel import select, desc
 
 router = APIRouter(
     prefix="/review",
     tags=["Text Analysis"],
     dependencies=[Depends(verify_api_key)],
     responses={
-        401: {
+        status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication failed - invalid or missing API key",
             "content": {"application/json": {"example": {"detail": "Invalid API key"}}},
         },
-        403: {
+        status.HTTP_403_FORBIDDEN: {
             "description": "No authorization header provided",
             "content": {
                 "application/json": {"example": {"detail": "Not authenticated"}}
             },
         },
-        500: {
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
             "description": "Internal server error - service temporarily unavailable",
             "content": {
                 "application/json": {"example": {"detail": "Internal server error"}}
@@ -40,10 +40,14 @@ router = APIRouter(
     response_description="Analysis results with identified errors and corrections",
     status_code=status.HTTP_201_CREATED,
     responses={
-        201: {"description": "Text analysis completed successfully"},
-        400: {"description": "Invalid input text"},
-        422: {"description": "Text too long or empty"},
-        500: {"description": "AI analysis service unavailable"},
+        status.HTTP_201_CREATED: {
+            "description": "Text analysis completed successfully"
+        },
+        status.HTTP_400_BAD_REQUEST: {"description": "Invalid input text"},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "Text too long or empty"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": "AI analysis service unavailable"
+        },
     },
 )
 async def analyze_text(
@@ -52,7 +56,9 @@ async def analyze_text(
         Body(
             title="Text to Analyze",
             description="The text content to analyze for grammatical and stylistic errors",
-            example="Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.",
+            example="""
+                Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. 
+                It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.""",
             min_length=1,
             max_length=50000,
         ),
@@ -136,9 +142,11 @@ async def analyze_text(
     description="Get detailed results of a previously completed text analysis",
     response_description="Complete assessment with all identified errors",
     responses={
-        200: {"description": "Assessment retrieved successfully"},
-        404: {"description": "Assessment not found"},
-        422: {"description": "Invalid assessment ID format"},
+        status.HTTP_200_OK: {"description": "Assessment retrieved successfully"},
+        status.HTTP_404_NOT_FOUND: {"description": "Assessment not found"},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "Invalid assessment ID format"
+        },
     },
 )
 async def get_assessment(
