@@ -6,7 +6,7 @@ from pydantic_ai.models.gemini import GeminiModel
 from pydantic_ai.providers.google_gla import GoogleGLAProvider
 from dotenv import load_dotenv
 import logging
-from ..models.models import ApiResponse, ErrorDetail, TextAssessment
+from ..models import ApiResponse, ErrorDetail, TextAssessment
 
 logger = logging.getLogger(__name__)
 

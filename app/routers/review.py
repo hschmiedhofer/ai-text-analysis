@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlalchemy.exc import NoResultFound
 from sqlmodel import select, desc
 from ..services.security import verify_api_key
-from ..models.models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
+from ..models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
 from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
 from ..services.database import SessionDep
 
