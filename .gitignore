@@ -6,11 +6,15 @@ dist/
 wheels/
 *.egg-info
 
+# VSCode related
+.vscode
+
 # Virtual environments
 .venv
 
+# Other
 .env
 logs
 local_tests
+testdata/
 database.db
-.vscode
