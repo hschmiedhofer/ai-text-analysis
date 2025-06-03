@@ -1,3 +1,16 @@
+"""
+Text Analysis Service using Google Gemini AI
+
+Provides AI-powered text analysis to identify grammatical, spelling, and
+stylistic errors. Handles API communication, validates error positions,
+and returns structured assessment results.
+
+Main function: identify_errors_in_text() - analyzes text and returns TextAssessment
+Custom exception: GeminiGeneralError - for API-related failures
+
+Requires GOOGLE_API_KEY and GEMINI_MODEL_ID environment variables.
+"""
+
 import os
 import time
 from datetime import datetime, timezone
@@ -20,7 +33,7 @@ if not GEMINI_API_KEY:
 # Get the model ID from environment variable
 GEMINI_MODEL_ID = os.getenv("GEMINI_MODEL_ID")
 if not GEMINI_MODEL_ID:
-    raise ValueError("No MODEL_ID found in environment variables.")
+    raise ValueError("No GEMINI_MODEL_ID found in environment variables.")
 
 
 # custom exception (optional, but good practice)
@@ -166,36 +179,3 @@ def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
             logger.warning(f"\ndropped incorrectly specified error: {e} - Reason: {ve}")
 
     assessment.errors = errors_validated
-
-
-async def test():
-    """Test function that analyzes a faulty article and exports results to JSON."""
-    # read article from test data
-    faulty_article = ""
-    article_file_path = "testdata/faulty_article.txt"
-    try:
-        with open(article_file_path, "r") as f:
-            faulty_article = f.read()
-    except Exception as e:
-        print(f"Error reading file '{article_file_path}': {e}")
-        exit(1)
-
-    # query the api for the correction
-    api_assessment = await identify_errors_in_text(faulty_article)
-
-    # write result to file
-    output_file_path = "logs/identified_errors.json"
-    try:
-        with open(output_file_path, "w") as f:
-            f.write(api_assessment.model_dump_json(indent=2))
-        print(f"Successfully exported errors to {output_file_path}")
-    except IOError as e:
-        print(f"Failed to write errors to JSON file: {e}")
-        exit(1)
-
-
-#  make the script executable for testing
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(test())
