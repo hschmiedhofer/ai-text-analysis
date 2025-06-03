@@ -3,10 +3,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlalchemy.exc import NoResultFound
 from sqlmodel import select, desc
 from ..services.security import verify_api_key
-from ..models import ErrorDetail, ErrorDetailDB, TextAssessment, TextAssessmentDB
+from ..models import ErrorDetailDB, TextAssessment, TextAssessmentDB
 from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
 from ..services.database import SessionDep
+from ..services.converters import convert_db_to_response
 
+# configure /review endpoint router with API key authentication and common error responses
 router = APIRouter(
     prefix="/review",
     tags=["Text Analysis"],
@@ -32,6 +34,7 @@ router = APIRouter(
 )
 
 
+# $ POST: /review
 @router.post(
     "/",
     summary="Analyze text for errors",
@@ -128,6 +131,7 @@ async def analyze_text(
     return analysis_result
 
 
+# $ GET: /review/{assessment_id}
 @router.get(
     "/{assessment_id}",
     summary="Retrieve specific assessment",
@@ -174,6 +178,7 @@ async def get_assessment(
     return convert_db_to_response(assessment_db)
 
 
+# $ GET: /review
 @router.get(
     "/",
     summary="List all assessments",
@@ -211,38 +216,3 @@ async def list_assessments(
     assessments_db = list(result.all())
 
     return [convert_db_to_response(assessment) for assessment in assessments_db]
-
-
-def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
-    """
-    Convert TextAssessmentDB to TextAssessment response model.
-
-    Transforms the database representation into the API response format,
-    properly handling the relationship between assessments and their errors.
-
-    Args:
-        assessment_db: Database model containing assessment and related errors
-
-    Returns:
-        TextAssessment: API response model with all error details included
-    """
-    error_details = [
-        ErrorDetail(
-            text_original=error.text_original,
-            text_corrected=error.text_corrected,
-            category=error.category,
-            description=error.description,
-            position=error.position,
-            context=error.context,
-        )
-        for error in assessment_db.errors
-    ]
-
-    return TextAssessment(
-        text_submitted=assessment_db.text_submitted,
-        summary=assessment_db.summary,
-        processing_time=assessment_db.processing_time,
-        tokens_used=assessment_db.tokens_used,
-        errors=error_details,
-        created_at=assessment_db.created_at,
-    )
