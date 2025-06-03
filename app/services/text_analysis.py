@@ -34,7 +34,8 @@ agent = Agent(model, output_type=ApiResponse)
 
 
 async def identify_errors_in_text(text: str) -> TextAssessment:
-    """Analyze text for spelling, grammar, and style errors using Gemini AI.
+    """
+    Analyze text for spelling, grammar, and style errors using Gemini AI.
 
     Args:
         text: The text to analyze for errors.
@@ -45,6 +46,7 @@ async def identify_errors_in_text(text: str) -> TextAssessment:
     Raises:
         GeminiGeneralError: If API call fails or returns invalid response.
     """
+
     prompt = """
         You are an expert proof-reader. I gave you an article. I want you to scan it for errors.
 
@@ -109,12 +111,14 @@ async def identify_errors_in_text(text: str) -> TextAssessment:
 
 
 def validate_assessment(text_orig: str, assessment: TextAssessment) -> None:
-    """Validate and correct error positions in assessment, removing invalid errors.
+    """
+    Validate and correct error positions in assessment, removing invalid errors.
 
     Args:
         text_orig: Original text that was analyzed.
         assessment: Assessment object to validate and modify in-place.
     """
+
     errors_validated: list[ErrorDetail] = []
     for e in assessment.errors:
         try:
