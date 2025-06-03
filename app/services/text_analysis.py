@@ -14,7 +14,7 @@ Requires GOOGLE_API_KEY and GEMINI_MODEL_ID environment variables.
 import os
 import time
 from datetime import datetime, timezone
-from pydantic_ai import Agent, AgentRunError
+from pydantic_ai import Agent
 from pydantic_ai.models.gemini import GeminiModel
 from pydantic_ai.providers.google_gla import GoogleGLAProvider
 from dotenv import load_dotenv
@@ -61,19 +61,41 @@ async def identify_errors_in_text(text: str) -> TextAssessment:
     """
 
     prompt = """
-        You are an expert proof-reader. I gave you an article. I want you to scan it for errors.
+    You are an expert proofreader and copy editor. Analyze the provided text for errors and provide a structured assessment.
 
-        For each error you found, supply the following information:
-        - original error text
-        - corrected error text
-        - category of the error
-        - location of the first character of the original error text. Character indexes start at 0.
-        - verbatim description of the error
-        - context. here, give me the original error plus some leading and trailing characters.In total, this text must be a subset of the supplied article.
+    TASK: Identify text errors and provide an overall quality summary.
 
-        With regard to the entire article, give me:
-        - a summary of the text quality.
-        """
+    ERROR DETECTION RULES:
+    - Focus on genuine errors, not subjective style preferences
+    - Categorize each error as: "spelling", "grammar", or "style"
+    - Provide precise character positions (0-based indexing)
+    - Include sufficient context to locate errors accurately
+    - Limit to maximum 30 errors to ensure quality over quantity
+
+    FOR EACH ERROR, provide exactly:
+    - text_original: The exact erroneous text as it appears. Return the wrong word only, not the entire sentence.
+    - text_corrected: Your suggested correction.
+    - category: Must be one of: "spelling", "grammar", "style"
+    - description: Brief explanation (under 500 characters)
+    - position: 0-based character index where error starts
+    - context: The exact erroneous text along with leading and trailing characters. 200 characters in total. Must contain the original text and must be an exact substring of the original text.
+
+    CATEGORY DEFINITIONS:
+    - spelling: Misspelled words, typos, incorrect word forms
+    - grammar: Subject-verb agreement, tense errors, sentence structure, punctuation
+    - style: Awkward phrasing, word choice, clarity issues, redundancy
+
+    QUALITY SUMMARY:
+    Provide an overall assessment (under 1000 characters) covering:
+    - General readability and clarity
+    - Most frequent error types found
+    - Text quality rating (poor/fair/good/excellent)
+    - Key recommendations for improvement
+
+    CRITICAL: Ensure all character positions and contexts are precisely accurate. The context must be an exact substring that exists in the original text.
+
+    RESPONSE FORMAT: Provide a structured response with "errors" array and "summary" string as specified.
+    """
 
     try:
         start_time = time.time()
@@ -93,7 +115,10 @@ async def identify_errors_in_text(text: str) -> TextAssessment:
             reason = "network_error"
         elif "invalid" in error_str and "key" in error_str:
             reason = "invalid_api_key"
+        elif "overloaded" in error_str or "unavailable" in error_str:
+            reason = "model_overloaded"
         else:
+            logger.error(f"\nLLM API Error: {str(e)}")
             reason = "unknown_api_error"
         # re-raise as a custom error for specific handling upstream
         raise GeminiGeneralError(f"API call failed ({reason})")
