@@ -4,6 +4,8 @@ from .api_models import ErrorCategoryEnum
 
 
 class TextAssessmentDB(SQLModel, table=True):
+    """Database model for storing text analysis assessments."""
+
     id: int | None = Field(default=None, primary_key=True)
 
     text_submitted: str
@@ -16,6 +18,8 @@ class TextAssessmentDB(SQLModel, table=True):
 
 
 class ErrorDetailDB(SQLModel, table=True):
+    """Database model for storing individual text errors."""
+
     id: int | None = Field(default=None, primary_key=True)
 
     text_original: str

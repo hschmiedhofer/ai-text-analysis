@@ -13,6 +13,8 @@ class ErrorCategoryEnum(str, Enum):
 
 
 class ErrorDetail(BaseModel):
+    """Individual error found in text with correction and metadata."""
+
     text_original: Annotated[str, Field(description="Original text with error")]
     text_corrected: Annotated[str, Field(description="Corrected version of text")]
     category: Annotated[ErrorCategoryEnum, Field(description="Type of error detected")]
@@ -28,6 +30,8 @@ class ErrorDetail(BaseModel):
 
 
 class ApiResponse(BaseModel):
+    """Basic API response containing errors and summary."""
+
     errors: Annotated[list[ErrorDetail], Field(description="List of detected errors")]
     summary: Annotated[
         str, Field(max_length=1000, description="Overall assessment summary")
@@ -35,6 +39,8 @@ class ApiResponse(BaseModel):
 
 
 class TextAssessment(ApiResponse):
+    """Extended assessment with original text and processing metadata."""
+
     text_submitted: Annotated[str, Field(description="Original text that was analyzed")]
     processing_time: Annotated[
         float, Field(ge=0, description="Processing time in seconds")

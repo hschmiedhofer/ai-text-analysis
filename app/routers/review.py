@@ -32,7 +32,6 @@ router = APIRouter(
 )
 
 
-# $ endpoint services
 @router.post(
     "/",
     summary="Analyze text for errors",
@@ -56,9 +55,7 @@ async def analyze_text(
         Body(
             title="Text to Analyze",
             description="The text content to analyze for grammatical and stylistic errors",
-            example="""
-                Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. 
-                It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.""",
+            example="Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.",
             min_length=1,
             max_length=50000,
         ),
@@ -77,12 +74,6 @@ async def analyze_text(
     - Provides specific corrections and explanations
     - Calculates precise error positions in the text
     - Stores results for historical tracking
-
-    **Processing Steps:**
-    1. Validates input text length and content
-    2. Sends text to AI model for analysis
-    3. Stores assessment and errors in database
-    4. Returns structured results with error details
     """
     # Input validation
     if not article.strip():
@@ -167,11 +158,6 @@ async def get_assessment(
 
     Returns the complete analysis results including original text,
     AI-generated summary, processing metadata, and detailed error list.
-
-    **Use Cases:**
-    - Review previous analysis results
-    - Display error details to users
-    - Track analysis history
     """
 
     statement = select(TextAssessmentDB).where(TextAssessmentDB.id == assessment_id)
@@ -227,9 +213,19 @@ async def list_assessments(
     return [convert_db_to_response(assessment) for assessment in assessments_db]
 
 
-# $ util functions
 def convert_db_to_response(assessment_db: TextAssessmentDB) -> TextAssessment:
-    """Convert TextAssessmentDB to TextAssessment response model."""
+    """
+    Convert TextAssessmentDB to TextAssessment response model.
+
+    Transforms the database representation into the API response format,
+    properly handling the relationship between assessments and their errors.
+
+    Args:
+        assessment_db: Database model containing assessment and related errors
+
+    Returns:
+        TextAssessment: API response model with all error details included
+    """
     error_details = [
         ErrorDetail(
             text_original=error.text_original,
