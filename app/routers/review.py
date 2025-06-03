@@ -46,8 +46,7 @@ router = APIRouter(
         status.HTTP_201_CREATED: {
             "description": "Text analysis completed successfully"
         },
-        status.HTTP_400_BAD_REQUEST: {"description": "Invalid input text"},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "Text too long or empty"},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "Invalid input text"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
             "description": "AI analysis service unavailable"
         },
