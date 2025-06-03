@@ -1,3 +1,16 @@
+"""
+Text Analysis Review Router
+
+This module provides FastAPI endpoints for text analysis and review functionality.
+It handles submission of text for AI-powered grammatical and stylistic analysis,
+stores results in the database, and provides retrieval endpoints for assessments.
+
+Endpoints:
+    POST /review/           - Submit text for analysis
+    GET /review/{id}        - Retrieve specific assessment by ID
+    GET /review/            - List all assessments with pagination
+"""
+
 from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlalchemy.exc import NoResultFound
@@ -26,7 +39,7 @@ router = APIRouter(
             },
         },
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "Internal server error - service temporarily unavailable",
+            "description": "Internal server error",
             "content": {
                 "application/json": {"example": {"detail": "Internal server error"}}
             },
@@ -47,9 +60,6 @@ router = APIRouter(
             "description": "Text analysis completed successfully"
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "Invalid input text"},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "AI analysis service unavailable"
-        },
     },
 )
 async def analyze_text(
