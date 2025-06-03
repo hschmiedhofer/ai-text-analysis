@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# add custom exception handlers
+# add custom exception handlers to app
 @app.exception_handler(GeminiGeneralError)
 async def gemini_exception_handler(request: Request, exc: GeminiGeneralError):
     """Exception handler for LLM errors."""
@@ -46,5 +46,5 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
-# add endpoint router(s)
+# add endpoint router(s) to app
 app.include_router(review.router)

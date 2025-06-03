@@ -235,6 +235,7 @@ app/
     ├── database.py         # Database configuration and setup
     ├── security.py         # Bearer token authentication
     └── text_analysis.py    # Core text analysis logic
+    └── text_sanitizer.py   # Input text sanitization module
 ```
 
 ## License

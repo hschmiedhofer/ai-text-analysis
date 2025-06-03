@@ -7,6 +7,7 @@ from ..models import ErrorDetailDB, TextAssessment, TextAssessmentDB
 from ..services.text_analysis import identify_errors_in_text, GeminiGeneralError
 from ..services.database import SessionDep
 from ..services.converters import convert_db_to_response
+from ..services.text_sanitizer import TextSanitizer
 
 # configure /review endpoint router with API key authentication and common error responses
 router = APIRouter(
@@ -79,7 +80,15 @@ async def analyze_text(
     - Stores results for historical tracking
     """
     # Input validation
-    if not article.strip():
+    try:
+        sanitized_article = TextSanitizer.sanitize(article)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid text content: {e}",
+        )
+
+    if not sanitized_article:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Text cannot be empty or contain only whitespace",
@@ -87,7 +96,7 @@ async def analyze_text(
 
     # try to get assessment from LLM
     try:
-        analysis_result = await identify_errors_in_text(article)
+        analysis_result = await identify_errors_in_text(sanitized_article)
     except GeminiGeneralError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
