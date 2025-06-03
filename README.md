@@ -25,7 +25,7 @@ A FastAPI-based text analysis service that identifies spelling, grammar, and sty
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
-   cd diamir-assignment
+   cd ai-text-analysis
    ```
 
 2. **Install dependencies with UV**:
@@ -42,12 +42,16 @@ A FastAPI-based text analysis service that identifies spelling, grammar, and sty
    # Google API Key for Gemini
    GOOGLE_API_KEY=your_actual_gemini_api_key
    # Model ID for Gemini
-   GEMINI_MODEL_ID=gemini-1.5-flash
+   GEMINI_MODEL_ID=gemini-2.0-flash
    # API Key for endpoint authentication
    API_KEY=your_demo_api_key
    ```
 
 4. **Start the server**:
+   ```bash
+   fastapi dev
+   ```
+   or
    ```bash
    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
@@ -71,20 +75,18 @@ The Bearer token must match the `API_KEY` value in your `.env` file.
 ## API Endpoints
 
 ### Analyze Text
-**POST** `/review/analyze`
+**POST** `/review/`
 
 Analyzes submitted text for errors and returns detailed assessment.
 
 **Example Request**:
 ```bash
 curl -X 'POST' \
-  'http://127.0.0.1:8000/review/analyze' \
+  'http://127.0.0.1:8000/review/' \
   -H 'accept: application/json' \
   -H 'Authorization: Bearer your_api_key' \
   -H 'Content-Type: application/json' \
-  -d '{
-    "text": "Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. It is required that we must equip citizen'\''s with the critcal thinking skill'\''s to evaluate sources."
-  }'
+  -d '"Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential."'
 ```
 
 **Response**:
@@ -94,6 +96,7 @@ curl -X 'POST' \
   "summary": "Text quality assessment summary",
   "processing_time": 2.34,
   "tokens_used": 150,
+  "created_at": "2025-06-03T10:30:00Z",
   "errors": [
     {
       "text_original": "educasion",
@@ -107,6 +110,55 @@ curl -X 'POST' \
 }
 ```
 
+**Example Request with Bearer Authentication**:
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/review/' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer hello' \
+  -H 'Content-Type: application/json' \
+  -d '"This is a sampl text with erors."'
+```
+
+### Get Assessment
+**GET** `/review/{assessment_id}`
+
+Retrieves a specific text assessment by its ID.
+
+**Example Request**:
+```bash
+curl -X 'GET' \
+  'http://127.0.0.1:8000/review/123' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer your_api_key'
+```
+
+### List All Assessments
+**GET** `/review/`
+
+Retrieves all completed text assessments (most recent first).
+
+**Example Request**:
+```bash
+curl -X 'GET' \
+  'http://127.0.0.1:8000/review/?limit=50' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer your_api_key'
+```
+
+**Response**:
+```json
+[
+  {
+    "text_submitted": "Sample text...",
+    "summary": "Analysis summary",
+    "processing_time": 1.23,
+    "tokens_used": 100,
+    "created_at": "2025-06-03T10:30:00Z",
+    "errors": [...]
+  }
+]
+```
 
 ## Error Categories
 
@@ -116,31 +168,6 @@ The API identifies three types of errors:
 - **grammar**: Grammatical mistakes and syntax errors  
 - **style**: Style improvements and readability suggestions
 
-## Testing
-
-### Manual Testing
-
-Use the included test script:
-```bash
-uv run python -m app.services.text_analysis
-```
-
-This will analyze the sample text in `testdata/faulty_article.txt` and output results to `logs/identified_errors.json`.
-
-### API Testing Examples
-
-```bash
-# Test with Bearer authentication
-curl -X 'POST' \
-  'http://127.0.0.1:8000/review/analyze' \
-  -H 'accept: application/json' \
-  -H 'Authorization: Bearer hello' \
-  -H 'Content-Type: application/json' \
-  -d '"This is a sampl text with erors."'
-
-# Health check (no auth required)
-curl -X GET "http://localhost:8000/health"
-```
 
 ## Environment Configuration
 
@@ -151,8 +178,8 @@ curl -X GET "http://localhost:8000/health"
 | Variable | Description | Required | Example |
 |----------|-------------|----------|---------|
 | `GOOGLE_API_KEY` | Google Gemini API key | Yes | `your_actual_gemini_api_key` |
-| `GEMINI_MODEL_ID` | Gemini model identifier | Yes | `gemini-1.5-flash` |
-| `API_KEY` | Bearer token for API authentication | Yes | `hello` (for demo) |
+| `GEMINI_MODEL_ID` | Gemini model identifier | Yes | `gemini-2.0-flash` |
+| `API_KEY` | Bearer token for API authentication | Yes | `my-api-key` (for demo) |
 
 ### Setting up Environment Variables
 
@@ -194,91 +221,43 @@ The API provides comprehensive error handling:
 
 ```
 app/
-├── main.py              # FastAPI application entry point
-├── database.py          # Database configuration and setup
+├── main.py                  # FastAPI application entry point
 ├── models/
-│   └── models.py        # Pydantic/SQLModel data models
+│   ├── __init__.py         # Model exports
+│   ├── api_models.py       # Pydantic response models
+│   └── db_models.py        # SQLModel database models
 ├── routers/
-│   └── review.py        # API route handlers
+│   ├── __init__.py
+│   └── review.py           # API route handlers
 └── services/
-    ├── security.py      # Bearer token authentication
-    └── text_analysis.py # Core text analysis logic
+    ├── __init__.py
+    ├── converters.py       # DB to API model conversion
+    ├── database.py         # Database configuration and setup
+    ├── security.py         # Bearer token authentication
+    └── text_analysis.py    # Core text analysis logic
 ```
-
-## Advanced Features
-
-### Error Position Validation
-
-The service includes sophisticated error position validation that:
-- Finds error context within the original text
-- Handles multiple occurrences of the same context
-- Validates calculated positions against actual text
-- Drops incorrectly positioned errors with detailed logging
-
-### Token Usage Tracking
-
-Each analysis tracks:
-- Processing time
-- Google API tokens consumed
-- Error counts by category
-- Text quality summary
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"No GOOGLE_API_KEY found"**: 
-   - Ensure you've created a `.env` file from `.env.example`
-   - Verify your `.env` file contains a valid Google Gemini API key
-   
-2. **Authentication failures**: 
-   - Verify Bearer token is included in request headers: `Authorization: Bearer your_api_key`
-   - Check that the Bearer token matches the `API_KEY` value in your `.env` file
-
-3. **Rate limit errors**: 
-   - Check your Google API quota and usage limits
-   
-4. **Module not found errors**:
-   - Ensure you're using `uv run` prefix for Python commands
-   - Verify dependencies are installed with `uv sync`
-
-### Demo Setup Validation
-
-Before running the application, ensure:
-- `.env` file exists and contains all required variables
-- Google API key is valid and has necessary permissions
-- Bearer token (`API_KEY`) is set for authentication
-
-### Development with UV
-
-UV provides fast dependency management:
-
-```bash
-# Install new dependencies
-uv add package_name
-
-# Run the application
-uv run uvicorn app.main:app --reload
-
-# Run test scripts
-uv run python -m app.services.text_analysis
-```
-
-## Demo Usage
-
-This project is designed for demonstration purposes:
-
-1. **Easy Setup**: Automatic SQLite database creation
-2. **Simple Auth**: Bearer token authentication for testing
-3. **Test Data**: Includes sample text with intentional errors
-4. **Immediate Testing**: Start analyzing text right after setup
-
-Perfect for showcasing AI-powered text analysis capabilities!
 
 ## License
 
-[Add your license information here]
+MIT License
 
-## Contributing
+Copyright (c) 2025 Heinz Schmiedhofer
 
-[Add contribution guidelines here]
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
