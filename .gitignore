@@ -13,3 +13,4 @@ wheels/
 logs
 local_tests
 database.db
+.vscode
