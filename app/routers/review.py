@@ -67,7 +67,7 @@ async def analyze_text(
         str,
         Body(
             title="Text to Analyze",
-            description="The text content to analyze for grammatical and stylistic errors",
+            description="The text content to analyze for grammatical and stylistic errors. Note: If your text contains double quotes, escape them with backslashes or use single quotes instead when possible.",
             example="Investing in robust media literacy educasion from an early age are not merely benefiscial, but, in point of fact, esential. It is required that we must equip citizen's with the critcal thinking skill's to evaluate sources.",
             min_length=1,
             max_length=50000,
