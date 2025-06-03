@@ -7,6 +7,7 @@ against a configured environment variable.
 """
 
 import os
+from typing import Annotated
 from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from dotenv import load_dotenv
@@ -28,8 +29,8 @@ security = HTTPBearer()
 
 
 async def verify_api_key(
-    credentials: HTTPAuthorizationCredentials = Security(security),
-):
+    credentials: Annotated[HTTPAuthorizationCredentials, Security(security)],
+) -> str:
     """
     Verify API key from Authorization header.
 
