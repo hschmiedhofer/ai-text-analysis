@@ -1,4 +1,4 @@
-# Editorial Validation API
+# AI-Text-Analysis
 
 A FastAPI-based text analysis service that identifies spelling, grammar, and style errors in submitted text using Google's Gemini AI model.
 
